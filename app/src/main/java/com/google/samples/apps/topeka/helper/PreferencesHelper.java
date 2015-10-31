@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package com.google.samples.apps.topeka.helper;
 
 import android.content.Context;
@@ -76,7 +77,7 @@ public class PreferencesHelper {
     /**
      * Signs out a player by removing all it's data.
      *
-     * @param context The Context which to obtain the SharedPreferences from.
+     * @param context The context which to obtain the SharedPreferences from.
      */
     public static void signOut(Context context) {
         SharedPreferences.Editor editor = getEditor(context);
@@ -84,6 +85,19 @@ public class PreferencesHelper {
         editor.remove(PREFERENCE_LAST_INITIAL);
         editor.remove(PREFERENCE_AVATAR);
         editor.apply();
+    }
+
+    /**
+     * Check whether a user is currently signed in.
+     *
+     * @param context The context to check this in.
+     * @return <code>true</code> if login data exists, else <code>false</code>.
+     */
+    public static boolean isSignedIn(Context context) {
+        final SharedPreferences preferences = getSharedPreferences(context);
+        return preferences.contains(PREFERENCE_FIRST_NAME) &&
+                preferences.contains(PREFERENCE_LAST_INITIAL) &&
+                preferences.contains(PREFERENCE_AVATAR);
     }
 
     private static SharedPreferences.Editor getEditor(Context context) {

@@ -17,15 +17,18 @@
 package com.google.samples.apps.topeka.activity;
 
 import android.app.Activity;
-import android.app.ActivityOptions;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
+import android.support.annotation.NonNull;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.app.ActivityOptionsCompat;
+import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.Toolbar;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.TextView;
-import android.widget.Toolbar;
 
 import com.google.samples.apps.topeka.R;
 import com.google.samples.apps.topeka.fragment.CategorySelectionFragment;
@@ -34,20 +37,25 @@ import com.google.samples.apps.topeka.model.Player;
 import com.google.samples.apps.topeka.persistence.TopekaDatabaseHelper;
 import com.google.samples.apps.topeka.widget.AvatarView;
 
-public class CategorySelectionActivity extends Activity {
+public class CategorySelectionActivity extends AppCompatActivity {
 
     private static final String EXTRA_PLAYER = "player";
 
-    public static void start(Context context, Player player, ActivityOptions options) {
-        Intent starter = new Intent(context, CategorySelectionActivity.class);
-        starter.putExtra(EXTRA_PLAYER, player);
-        context.startActivity(starter, options.toBundle());
+    public static void start(Activity activity, Player player, ActivityOptionsCompat options) {
+        Intent starter = getStartIntent(activity, player);
+        ActivityCompat.startActivity(activity, starter, options.toBundle());
     }
 
     public static void start(Context context, Player player) {
+        Intent starter = getStartIntent(context, player);
+        context.startActivity(starter);
+    }
+
+    @NonNull
+    static Intent getStartIntent(Context context, Player player) {
         Intent starter = new Intent(context, CategorySelectionActivity.class);
         starter.putExtra(EXTRA_PLAYER, player);
-        context.startActivity(starter);
+        return starter;
     }
 
     @Override
@@ -56,6 +64,9 @@ public class CategorySelectionActivity extends Activity {
 
         setContentView(R.layout.activity_category_selection);
         Player player = getIntent().getParcelableExtra(EXTRA_PLAYER);
+        if (!PreferencesHelper.isSignedIn(this) && player != null) {
+            PreferencesHelper.writeToPreferences(this, player);
+        }
         setUpToolbar(player);
         if (savedInstanceState == null) {
             attachCategoryGridFragment();
@@ -74,11 +85,12 @@ public class CategorySelectionActivity extends Activity {
 
     private void setUpToolbar(Player player) {
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar_player);
-        setActionBar(toolbar);
+        setSupportActionBar(toolbar);
         //noinspection ConstantConditions
-        getActionBar().setDisplayShowTitleEnabled(false);
+        getSupportActionBar().setDisplayShowTitleEnabled(false);
         final AvatarView avatarView = (AvatarView) toolbar.findViewById(R.id.avatar);
-        avatarView.setImageDrawable(getDrawable(player.getAvatar().getDrawableId()));
+        avatarView.setAvatar(player.getAvatar().getDrawableId());
+        //noinspection PrivateResource
         ((TextView) toolbar.findViewById(R.id.title)).setText(getDisplayName(player));
     }
 
@@ -103,7 +115,7 @@ public class CategorySelectionActivity extends Activity {
         PreferencesHelper.signOut(this);
         TopekaDatabaseHelper.reset(this);
         SignInActivity.start(this, false, null);
-        finishAfterTransition();
+        ActivityCompat.finishAfterTransition(this);
     }
 
     private String getDisplayName(Player player) {
@@ -112,7 +124,7 @@ public class CategorySelectionActivity extends Activity {
     }
 
     private void attachCategoryGridFragment() {
-        getFragmentManager().beginTransaction()
+        getSupportFragmentManager().beginTransaction()
                 .replace(R.id.quiz_container, CategorySelectionFragment.newInstance())
                 .commit();
         setProgressBarVisibility(View.GONE);

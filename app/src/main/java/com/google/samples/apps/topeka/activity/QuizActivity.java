@@ -18,42 +18,55 @@ package com.google.samples.apps.topeka.activity;
 
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
-import android.app.Activity;
+import android.annotation.SuppressLint;
+import android.annotation.TargetApi;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Build;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
+import android.support.annotation.VisibleForTesting;
+import android.support.design.widget.FloatingActionButton;
+import android.support.test.espresso.contrib.CountingIdlingResource;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
+import android.support.v4.view.ViewCompat;
+import android.support.v4.view.ViewPropertyAnimatorListenerAdapter;
+import android.support.v4.view.animation.FastOutSlowInInterpolator;
+import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.View;
 import android.view.ViewAnimationUtils;
-import android.view.animation.AnimationUtils;
+import android.view.Window;
 import android.view.animation.Interpolator;
 import android.widget.ImageView;
-import android.widget.Toolbar;
 
 import com.google.samples.apps.topeka.R;
 import com.google.samples.apps.topeka.fragment.QuizFragment;
+import com.google.samples.apps.topeka.helper.ApiLevelHelper;
 import com.google.samples.apps.topeka.model.Category;
 import com.google.samples.apps.topeka.persistence.TopekaDatabaseHelper;
-import com.google.samples.apps.topeka.widget.fab.FloatingActionButton;
 
 import static com.google.samples.apps.topeka.adapter.CategoryAdapter.DRAWABLE;
 
-public class QuizActivity extends Activity {
+public class QuizActivity extends AppCompatActivity {
 
     private static final String TAG = "QuizActivity";
     private static final String IMAGE_CATEGORY = "image_category_";
     private static final String STATE_IS_PLAYING = "isPlaying";
     private static final int UNDEFINED = -1;
     private static final String FRAGMENT_TAG = "Quiz";
+
     private Interpolator mInterpolator;
     private String mCategoryId;
     private QuizFragment mQuizFragment;
     private Toolbar mToolbar;
-    private ImageView mQuizFab;
+    private FloatingActionButton mQuizFab;
     private boolean mSavedStateIsPlaying;
     private ImageView mIcon;
     private Animator mCircularReveal;
+    private CountingIdlingResource mCountingIdlingResource;
 
     private View.OnClickListener mOnClickListener = new View.OnClickListener() {
         @Override
@@ -66,12 +79,12 @@ public class QuizActivity extends Activity {
                     submitAnswer();
                     break;
                 case R.id.quiz_done:
-                    finishAfterTransition();
+                    ActivityCompat.finishAfterTransition(QuizActivity.this);
                     break;
                 case UNDEFINED:
                     final CharSequence contentDescription = v.getContentDescription();
-                    if (contentDescription != null && contentDescription.equals(
-                            getString(R.string.up))) {
+                    if (contentDescription != null && contentDescription
+                            .equals(getString(R.string.up))) {
                         onBackPressed();
                         break;
                     }
@@ -91,20 +104,20 @@ public class QuizActivity extends Activity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        mCountingIdlingResource = new CountingIdlingResource("Quiz");
         mCategoryId = getIntent().getStringExtra(Category.TAG);
-        mInterpolator = AnimationUtils.loadInterpolator(this,
-                android.R.interpolator.fast_out_slow_in);
+        mInterpolator = new FastOutSlowInInterpolator();
         if (null != savedInstanceState) {
             mSavedStateIsPlaying = savedInstanceState.getBoolean(STATE_IS_PLAYING);
         }
-        populate(mCategoryId);
         super.onCreate(savedInstanceState);
+        populate(mCategoryId);
     }
 
     @Override
     protected void onResume() {
         if (mSavedStateIsPlaying) {
-            mQuizFragment = (QuizFragment) getFragmentManager().findFragmentByTag(
+            mQuizFragment = (QuizFragment) getSupportFragmentManager().findFragmentByTag(
                     FRAGMENT_TAG);
             findViewById(R.id.quiz_fragment_container).setVisibility(View.VISIBLE);
         }
@@ -119,55 +132,101 @@ public class QuizActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        final View iconView = findViewById(R.id.icon);
-        if (iconView == null) {
-            // Skip the animation if the icon is not initialized.
+        if (mIcon == null || mQuizFab == null) {
+            // Skip the animation if icon or fab are not initialized.
             super.onBackPressed();
             return;
         }
 
-        // Scale the icon to 0 size before calling onBackPressed if it exists.
-        iconView.animate().scaleX(0).scaleY(0).setStartDelay(0)
-                .setInterpolator(mInterpolator).setListener(
-                new AnimatorListenerAdapter() {
+        // Scale the icon and fab to 0 size before calling onBackPressed if it exists.
+        ViewCompat.animate(mIcon)
+                .scaleX(.7f)
+                .scaleY(.7f)
+                .alpha(0f)
+                .setInterpolator(mInterpolator)
+                .start();
+
+        ViewCompat.animate(mQuizFab)
+                .scaleX(0f)
+                .scaleY(0f)
+                .setInterpolator(mInterpolator)
+                .setStartDelay(100)
+                .setListener(new ViewPropertyAnimatorListenerAdapter() {
+                    @SuppressLint("NewApi")
                     @Override
-                    public void onAnimationEnd(Animator animation) {
+                    public void onAnimationEnd(View view) {
+                        if (isFinishing() ||
+                                (ApiLevelHelper.isAtLeast(Build.VERSION_CODES.JELLY_BEAN_MR1)
+                                        && isDestroyed())) {
+                            return;
+                        }
                         QuizActivity.super.onBackPressed();
-                        super.onAnimationEnd(animation);
                     }
-                });
+                })
+                .start();
     }
 
-    private void startQuizFromClickOn(final View view) {
+    private void startQuizFromClickOn(final View clickedView) {
         initQuizFragment();
-        getFragmentManager().beginTransaction()
+        getSupportFragmentManager().beginTransaction()
                 .replace(R.id.quiz_fragment_container, mQuizFragment, FRAGMENT_TAG).commit();
         final View fragmentContainer = findViewById(R.id.quiz_fragment_container);
-        int centerX = (view.getLeft() + view.getRight()) / 2;
-        int centerY = (view.getTop() + view.getBottom()) / 2;
-        int finalRadius = Math.max(fragmentContainer.getWidth(), fragmentContainer.getHeight());
+        revealFragmentContainer(clickedView, fragmentContainer);
+        // the toolbar should not have more elevation than the content while playing
+        setToolbarElevation(false);
+    }
+
+    private void revealFragmentContainer(final View clickedView, final View fragmentContainer) {
+        if (ApiLevelHelper.isAtLeast(Build.VERSION_CODES.LOLLIPOP)) {
+            revealFragmentContainerLollipop(clickedView, fragmentContainer);
+        } else {
+            fragmentContainer.setVisibility(View.VISIBLE);
+            clickedView.setVisibility(View.GONE);
+            mIcon.setVisibility(View.GONE);
+        }
+    }
+
+    @TargetApi(Build.VERSION_CODES.LOLLIPOP)
+    private void revealFragmentContainerLollipop(final View clickedView,
+                                                 final View fragmentContainer) {
+        prepareCircularReveal(clickedView, fragmentContainer);
+        ViewCompat.animate(clickedView)
+                .scaleX(0)
+                .scaleY(0)
+                .setInterpolator(mInterpolator)
+                .setListener(new ViewPropertyAnimatorListenerAdapter() {
+                    @Override
+                    public void onAnimationEnd(View view) {
+                        fragmentContainer.setVisibility(View.VISIBLE);
+                        mCircularReveal.start();
+                        clickedView.setVisibility(View.GONE);
+                    }
+                })
+                .start();
+    }
+
+    @TargetApi(Build.VERSION_CODES.LOLLIPOP)
+    private void prepareCircularReveal(View startView, View targetView) {
+        int centerX = (startView.getLeft() + startView.getRight()) / 2;
+        int centerY = (startView.getTop() + startView.getBottom()) / 2;
+        float finalRadius = (float) Math.hypot((double) centerX, (double) centerY);
         mCircularReveal = ViewAnimationUtils.createCircularReveal(
-                fragmentContainer, centerX, centerY, 0, finalRadius);
-        fragmentContainer.setVisibility(View.VISIBLE);
-        view.setVisibility(View.GONE);
+                targetView, centerX, centerY, 0, finalRadius);
 
         mCircularReveal.addListener(new AnimatorListenerAdapter() {
             @Override
             public void onAnimationEnd(Animator animation) {
                 mIcon.setVisibility(View.GONE);
-                super.onAnimationEnd(animation);
                 mCircularReveal.removeListener(this);
             }
         });
-
-        mCircularReveal.start();
-
-        // the toolbar should not have more elevation than the content while playing
-        mToolbar.setElevation(0);
     }
 
-    public void elevateToolbar() {
-        mToolbar.setElevation(getResources().getDimension(R.dimen.elevation_header));
+    public void setToolbarElevation(boolean shouldElevate) {
+        if (ApiLevelHelper.isAtLeast(Build.VERSION_CODES.LOLLIPOP)) {
+            mToolbar.setElevation(shouldElevate ?
+                    getResources().getDimension(R.dimen.elevation_header) : 0);
+        }
     }
 
     private void initQuizFragment() {
@@ -175,7 +234,7 @@ public class QuizActivity extends Activity {
                 new QuizFragment.SolvedStateListener() {
                     @Override
                     public void onCategorySolved() {
-                        elevateToolbar();
+                        setToolbarElevation(true);
                         displayDoneFab();
                     }
 
@@ -189,7 +248,6 @@ public class QuizActivity extends Activity {
                                 @Override
                                 public void onAnimationEnd(Animator animation) {
                                     showQuizFabWithDoneIcon();
-                                    super.onAnimationEnd(animation);
                                     mCircularReveal.removeListener(this);
                                 }
                             });
@@ -199,18 +257,23 @@ public class QuizActivity extends Activity {
                     }
 
                     private void showQuizFabWithDoneIcon() {
-                        mQuizFab.setImageResource(R.drawable.ic_done);
+                        mQuizFab.setImageResource(R.drawable.ic_tick);
                         mQuizFab.setId(R.id.quiz_done);
                         mQuizFab.setVisibility(View.VISIBLE);
-                        mQuizFab.setScaleX(0);
-                        mQuizFab.setScaleY(0);
-                        mQuizFab.animate().scaleX(1).scaleY(1).
-                                setInterpolator(mInterpolator)
-                                .setListener(null);
+                        mQuizFab.setScaleX(0f);
+                        mQuizFab.setScaleY(0f);
+                        ViewCompat.animate(mQuizFab)
+                                .scaleX(1)
+                                .scaleY(1)
+                                .setInterpolator(mInterpolator)
+                                .setListener(null)
+                                .start();
                     }
                 });
-        // the toolbar should not have more elevation than the content while playing
-        mToolbar.setElevation(0);
+        if (ApiLevelHelper.isAtLeast(Build.VERSION_CODES.LOLLIPOP)) {
+            // the toolbar should not have more elevation than the content while playing
+            setToolbarElevation(false);
+        }
     }
 
     /**
@@ -220,13 +283,20 @@ public class QuizActivity extends Activity {
         submitAnswer();
     }
 
+    /**
+     * Solely exists for testing purposes and making sure Espresso does not get confused.
+     */
+    public void lockIdlingResource() {
+        mCountingIdlingResource.increment();
+    }
+
     private void submitAnswer() {
-        elevateToolbar();
+        mCountingIdlingResource.decrement();
         if (!mQuizFragment.showNextPage()) {
             mQuizFragment.showSummary();
             return;
         }
-        mToolbar.setElevation(0);
+        setToolbarElevation(false);
     }
 
     private void populate(String categoryId) {
@@ -236,34 +306,54 @@ public class QuizActivity extends Activity {
         }
         Category category = TopekaDatabaseHelper.getCategoryWith(this, categoryId);
         setTheme(category.getTheme().getStyleId());
+        if (ApiLevelHelper.isAtLeast(Build.VERSION_CODES.LOLLIPOP)) {
+            Window window = getWindow();
+            window.setStatusBarColor(ContextCompat.getColor(this,
+                    category.getTheme().getPrimaryDarkColor()));
+        }
         initLayout(category.getId());
         initToolbar(category);
     }
 
     private void initLayout(String categoryId) {
         setContentView(R.layout.activity_quiz);
+        //noinspection PrivateResource
         mIcon = (ImageView) findViewById(R.id.icon);
         int resId = getResources().getIdentifier(IMAGE_CATEGORY + categoryId, DRAWABLE,
                 getApplicationContext().getPackageName());
         mIcon.setImageResource(resId);
+        mIcon.setImageResource(resId);
+        ViewCompat.animate(mIcon)
+                .scaleX(1)
+                .scaleY(1)
+                .alpha(1)
+                .setInterpolator(mInterpolator)
+                .setStartDelay(300)
+                .start();
         mQuizFab = (FloatingActionButton) findViewById(R.id.fab_quiz);
         mQuizFab.setImageResource(R.drawable.ic_play);
-        mQuizFab.setVisibility(mSavedStateIsPlaying ? View.GONE : View.VISIBLE);
+        if (mSavedStateIsPlaying) {
+            mQuizFab.hide();
+        } else {
+            mQuizFab.show();
+        }
         mQuizFab.setOnClickListener(mOnClickListener);
-        mIcon.setScaleX(0);
-        mIcon.setScaleY(0);
-        mIcon.setImageResource(resId);
-        mIcon.animate().scaleX(1).scaleY(1).setInterpolator(mInterpolator)
-                .setStartDelay(300);
     }
 
     private void initToolbar(Category category) {
         mToolbar = (Toolbar) findViewById(R.id.toolbar_activity_quiz);
+        mToolbar.setBackgroundColor(
+                ContextCompat.getColor(this, category.getTheme().getPrimaryColor()));
         mToolbar.setTitle(category.getName());
         mToolbar.setNavigationOnClickListener(mOnClickListener);
         if (mSavedStateIsPlaying) {
             // the toolbar should not have more elevation than the content while playing
-            mToolbar.setElevation(0);
+            setToolbarElevation(false);
         }
+    }
+
+    @VisibleForTesting
+    public CountingIdlingResource getCountingIdlingResource() {
+        return mCountingIdlingResource;
     }
 }
