@@ -24,6 +24,7 @@ import android.support.test.rule.ActivityTestRule;
 import android.support.test.runner.AndroidJUnit4;
 import android.test.suitebuilder.annotation.LargeTest;
 
+import com.google.samples.apps.topeka.AnimationAwareTestRule;
 import com.google.samples.apps.topeka.R;
 import com.google.samples.apps.topeka.activity.QuizActivity;
 import com.google.samples.apps.topeka.helper.PreferencesHelper;
@@ -56,7 +57,7 @@ public abstract class BaseQuizActivityTest {
 
     private List<Category> mCategories;
     @Rule
-    public ActivityTestRule<QuizActivity> mActivityRule =
+    public final ActivityTestRule<QuizActivity> mActivityRule =
             new ActivityTestRule<QuizActivity>(QuizActivity.class) {
                 @Override
                 protected void beforeActivityLaunched() {
@@ -76,6 +77,10 @@ public abstract class BaseQuizActivityTest {
                 }
             };
 
+    @Rule
+    public final AnimationAwareTestRule mAnimationAwareTestRule =
+            new AnimationAwareTestRule();
+
     abstract int getCategory();
 
     @Before
@@ -86,6 +91,11 @@ public abstract class BaseQuizActivityTest {
     @Test
     public void categoryName_isDisplayed() {
         onView(withText(getCurrentCategory().getName())).check(matches(isDisplayed()));
+    }
+
+    @Test
+    public void goBack_fromToolbar() {
+        onView(withId(R.id.back)).perform(click());
     }
 
     @Test

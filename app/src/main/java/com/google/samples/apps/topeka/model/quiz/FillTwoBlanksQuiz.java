@@ -16,15 +16,18 @@
 
 package com.google.samples.apps.topeka.model.quiz;
 
+import android.annotation.SuppressLint;
 import android.os.Parcel;
+import android.support.annotation.NonNull;
 
 import com.google.samples.apps.topeka.helper.AnswerHelper;
 
 import java.util.Arrays;
 
+@SuppressLint("ParcelCreator")
 public final class FillTwoBlanksQuiz extends Quiz<String[]> {
 
-    public FillTwoBlanksQuiz(String question, String[] answer, boolean solved) {
+    public FillTwoBlanksQuiz(@NonNull String question, @NonNull String[] answer, boolean solved) {
         super(question, answer, solved);
     }
 
@@ -49,6 +52,20 @@ public final class FillTwoBlanksQuiz extends Quiz<String[]> {
     public void writeToParcel(Parcel dest, int flags) {
         super.writeToParcel(dest, flags);
         dest.writeStringArray(getAnswer());
+    }
+
+    @Override
+    public boolean isAnswerCorrect(String[] answer) {
+        String[] correctAnswers = getAnswer();
+        if (answer == null || correctAnswers == null) {
+            return false;
+        }
+        for (int i = 0; i < answer.length; i++) {
+            if (!answer[i].equalsIgnoreCase(correctAnswers[i])) {
+                return false;
+            }
+        }
+        return answer.length == correctAnswers.length;
     }
 
     @Override

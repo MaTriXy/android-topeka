@@ -17,7 +17,5 @@
 <transitionSet xmlns:android="http://schemas.android.com/apk/res/android">
     <changeBounds />
     <changeTransform />
-    <changeClipBounds />
-    <changeImageTransform />
     <arcMotion android:minimumHorizontalAngle="45" />
 </transitionSet>

@@ -31,7 +31,6 @@ public class AnswerHelper {
         //no instance
     }
 
-
     /**
      * Converts an array of answers to a readable answer.
      *
@@ -85,7 +84,7 @@ public class AnswerHelper {
                 return false;
             }
         }
-        return true;
+        return checkedItems.size() == answerIds.length;
     }
 
 }

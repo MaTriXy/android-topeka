@@ -18,19 +18,17 @@ package com.google.samples.apps.topeka.widget.quiz;
 
 import android.animation.ArgbEvaluator;
 import android.animation.ObjectAnimator;
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
-import android.graphics.drawable.ColorDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.support.annotation.ColorInt;
-import android.support.annotation.DimenRes;
 import android.support.v4.content.ContextCompat;
 import android.support.v4.view.MarginLayoutParamsCompat;
 import android.support.v4.view.animation.LinearOutSlowInInterpolator;
-import android.util.IntProperty;
 import android.util.Property;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -45,6 +43,7 @@ import android.widget.TextView;
 import com.google.samples.apps.topeka.R;
 import com.google.samples.apps.topeka.activity.QuizActivity;
 import com.google.samples.apps.topeka.helper.ApiLevelHelper;
+import com.google.samples.apps.topeka.helper.ViewUtils;
 import com.google.samples.apps.topeka.model.Category;
 import com.google.samples.apps.topeka.model.quiz.Quiz;
 import com.google.samples.apps.topeka.widget.fab.CheckableFab;
@@ -61,54 +60,31 @@ import com.google.samples.apps.topeka.widget.fab.CheckableFab;
  * </p>
  *
  * @param <Q> The type of {@link com.google.samples.apps.topeka.model.quiz.Quiz} you want to
- *            display.
+ * display.
  */
 public abstract class AbsQuizView<Q extends Quiz> extends FrameLayout {
 
     private static final int ANSWER_HIDE_DELAY = 500;
     private static final int FOREGROUND_COLOR_CHANGE_DELAY = 750;
-    protected final int mMinHeightTouchTarget;
     private final int mSpacingDouble;
     private final LayoutInflater mLayoutInflater;
     private final Category mCategory;
     private final Q mQuiz;
-    private Interpolator mLinearOutSlowInInterpolator;
+    private final Interpolator mLinearOutSlowInInterpolator;
+    private final Handler mHandler;
+    private final InputMethodManager mInputMethodManager;
     private boolean mAnswered;
     private TextView mQuestionView;
     private CheckableFab mSubmitAnswer;
-    private Handler mHandler;
     private Runnable mHideFabRunnable;
     private Runnable mMoveOffScreenRunnable;
-    private InputMethodManager mInputMethodManager;
-
-    private static final Property<AbsQuizView, Integer> FOREGROUND_COLOR =
-            new IntProperty<AbsQuizView>("foregroundColor") {
-
-                @Override
-                public void setValue(AbsQuizView layout, int value) {
-                    if (layout.getForeground() instanceof ColorDrawable) {
-                        ((ColorDrawable) layout.getForeground().mutate()).setColor(value);
-                    } else {
-                        layout.setForeground(new ColorDrawable(value));
-                    }
-                }
-
-                @Override
-                public Integer get(AbsQuizView layout) {
-                    if (layout.getForeground() instanceof ColorDrawable) {
-                        return ((ColorDrawable) layout.getForeground()).getColor();
-                    } else {
-                        return Color.TRANSPARENT;
-                    }
-                }
-            };
 
     /**
      * Enables creation of views for quizzes.
      *
-     * @param context  The context for this view.
+     * @param context The context for this view.
      * @param category The {@link Category} this view is running in.
-     * @param quiz     The actual {@link Quiz} that is going to be displayed.
+     * @param quiz The actual {@link Quiz} that is going to be displayed.
      */
     public AbsQuizView(Context context, Category category, Q quiz) {
         super(context);
@@ -117,8 +93,6 @@ public abstract class AbsQuizView<Q extends Quiz> extends FrameLayout {
         mSpacingDouble = getResources().getDimensionPixelSize(R.dimen.spacing_double);
         mLayoutInflater = LayoutInflater.from(context);
         mSubmitAnswer = getSubmitButton();
-        mMinHeightTouchTarget = getResources()
-                .getDimensionPixelSize(R.dimen.min_height_touch_target);
         mLinearOutSlowInInterpolator = new LinearOutSlowInInterpolator();
         mHandler = new Handler();
         mInputMethodManager = (InputMethodManager) context.getSystemService
@@ -165,7 +139,7 @@ public abstract class AbsQuizView<Q extends Quiz> extends FrameLayout {
         if (quizContentView instanceof ViewGroup) {
             ((ViewGroup) quizContentView).setClipToPadding(false);
         }
-        setMinHeightInternal(quizContentView, R.dimen.min_height_question);
+        setMinHeightInternal(quizContentView);
         return quizContentView;
     }
 
@@ -207,6 +181,7 @@ public abstract class AbsQuizView<Q extends Quiz> extends FrameLayout {
                     if (mInputMethodManager.isAcceptingText()) {
                         mInputMethodManager.hideSoftInputFromWindow(v.getWindowToken(), 0);
                     }
+                    mSubmitAnswer.setEnabled(false);
                 }
             });
         }
@@ -317,6 +292,7 @@ public abstract class AbsQuizView<Q extends Quiz> extends FrameLayout {
         animateForegroundColor(backgroundColor);
     }
 
+    @SuppressLint("NewApi")
     private void adjustFab(boolean answerCorrect, int backgroundColor) {
         mSubmitAnswer.setChecked(answerCorrect);
         mSubmitAnswer.setBackgroundTintList(ColorStateList.valueOf(backgroundColor));
@@ -334,7 +310,7 @@ public abstract class AbsQuizView<Q extends Quiz> extends FrameLayout {
         // Animate X and Y scaling separately to allow different start delays.
         // object animators for x and y with different durations and then run them independently
         resizeViewProperty(View.SCALE_X, .5f, 200);
-        resizeViewProperty(View.SCALE_Y, .5f / widthHeightRatio, 250);
+        resizeViewProperty(View.SCALE_Y, .5f / widthHeightRatio, 300);
     }
 
     private void resizeViewProperty(Property<View, Float> property,
@@ -358,7 +334,7 @@ public abstract class AbsQuizView<Q extends Quiz> extends FrameLayout {
     }
 
     private void animateForegroundColor(@ColorInt final int targetColor) {
-        ObjectAnimator animator = ObjectAnimator.ofInt(this, FOREGROUND_COLOR,
+        ObjectAnimator animator = ObjectAnimator.ofInt(this, ViewUtils.FOREGROUND_COLOR,
                 Color.TRANSPARENT, targetColor);
         animator.setEvaluator(new ArgbEvaluator());
         animator.setStartDelay(FOREGROUND_COLOR_CHANGE_DELAY);
@@ -380,7 +356,7 @@ public abstract class AbsQuizView<Q extends Quiz> extends FrameLayout {
                 FOREGROUND_COLOR_CHANGE_DELAY * 2);
     }
 
-    private void setMinHeightInternal(View view, @DimenRes int resId) {
-        view.setMinimumHeight(getResources().getDimensionPixelSize(resId));
+    private void setMinHeightInternal(View view) {
+        view.setMinimumHeight(getResources().getDimensionPixelSize(R.dimen.min_height_question));
     }
 }

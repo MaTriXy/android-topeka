@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 Google Inc.
+ * Copyright 2015 Google Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,15 +16,20 @@
 
 package com.google.samples.apps.topeka.activity;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Build;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.ActivityOptionsCompat;
+import android.support.v4.app.Fragment;
+import android.support.v4.app.FragmentManager;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
+import android.transition.TransitionInflater;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -32,6 +37,7 @@ import android.widget.TextView;
 
 import com.google.samples.apps.topeka.R;
 import com.google.samples.apps.topeka.fragment.CategorySelectionFragment;
+import com.google.samples.apps.topeka.helper.ApiLevelHelper;
 import com.google.samples.apps.topeka.helper.PreferencesHelper;
 import com.google.samples.apps.topeka.model.Player;
 import com.google.samples.apps.topeka.persistence.TopekaDatabaseHelper;
@@ -64,8 +70,12 @@ public class CategorySelectionActivity extends AppCompatActivity {
 
         setContentView(R.layout.activity_category_selection);
         Player player = getIntent().getParcelableExtra(EXTRA_PLAYER);
-        if (!PreferencesHelper.isSignedIn(this) && player != null) {
-            PreferencesHelper.writeToPreferences(this, player);
+        if (!PreferencesHelper.isSignedIn(this)) {
+            if (player == null) {
+                player = PreferencesHelper.getPlayer(this);
+            } else {
+                PreferencesHelper.writeToPreferences(this, player);
+            }
         }
         setUpToolbar(player);
         if (savedInstanceState == null) {
@@ -73,6 +83,7 @@ public class CategorySelectionActivity extends AppCompatActivity {
         } else {
             setProgressBarVisibility(View.GONE);
         }
+        supportPostponeEnterTransition();
     }
 
     @Override
@@ -101,6 +112,14 @@ public class CategorySelectionActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        Fragment fragment = getSupportFragmentManager().findFragmentById(R.id.category_container);
+        if (fragment != null) {
+            fragment.onActivityResult(requestCode, resultCode, data);
+        }
+    }
+
+    @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         switch (item.getItemId()) {
             case R.id.sign_out: {
@@ -111,10 +130,15 @@ public class CategorySelectionActivity extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
 
+    @SuppressLint("NewApi")
     private void signOut() {
         PreferencesHelper.signOut(this);
         TopekaDatabaseHelper.reset(this);
-        SignInActivity.start(this, false, null);
+        if (ApiLevelHelper.isAtLeast(Build.VERSION_CODES.LOLLIPOP)) {
+            getWindow().setExitTransition(TransitionInflater.from(this)
+                    .inflateTransition(R.transition.category_enter));
+        }
+        SignInActivity.start(this, false);
         ActivityCompat.finishAfterTransition(this);
     }
 
@@ -124,8 +148,13 @@ public class CategorySelectionActivity extends AppCompatActivity {
     }
 
     private void attachCategoryGridFragment() {
-        getSupportFragmentManager().beginTransaction()
-                .replace(R.id.quiz_container, CategorySelectionFragment.newInstance())
+        FragmentManager supportFragmentManager = getSupportFragmentManager();
+        Fragment fragment = supportFragmentManager.findFragmentById(R.id.category_container);
+        if (!(fragment instanceof CategorySelectionFragment)) {
+            fragment = CategorySelectionFragment.newInstance();
+        }
+        supportFragmentManager.beginTransaction()
+                .replace(R.id.category_container, fragment)
                 .commit();
         setProgressBarVisibility(View.GONE);
     }
