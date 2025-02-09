@@ -14,5 +14,5 @@
  * limitations under the License.
  */
 
-
 include ':app'
+include ':base', ':quiz', ':categories'

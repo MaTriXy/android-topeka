@@ -27,7 +27,7 @@ tests](http://google.github.io/android-testing-support-library) which can be
 executed with the `connectedAndroidTest` gradle task.
 
 You can read more about the project on the [Android Developers
-blog](http://android-developers.blogspot.co.uk/2015/06/more-material-design-with-topeka-for_16.html).
+blog](https://android-developers.googleblog.com/2015/06/more-material-design-with-topeka-for.html).
 
 ### Screenshots
 
@@ -43,7 +43,7 @@ to get an overview of all the tasks available for this project.
 Some important tasks are:
 
 ```
-assembleDebug - Assembles all Debug builds.
+bundleDebug - Assembles all Debug builds.
 installDebug - Installs the Debug build.
 connectedAndroidTest - Installs and runs the tests for Debug build on connected
 devices.
@@ -51,8 +51,6 @@ test - Run all unit tests.
 ```
 
 ### Support
-
-- Google+ Community: https://plus.google.com/communities/105153134372062985968
 
 - Stack Overflow: http://stackoverflow.com/questions/tagged/android
 
